@@ -1,0 +1,65 @@
+name: Recolectar pruebas (semanal) y publicar
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"   # lunes 04:17 UTC (06:17 en España en verano)
+  workflow_dispatch:        # botón «Run workflow» para lanzarlo a mano
+  push:
+    paths: ["web/**", ".github/workflows/weekly.yml"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    # la recolección solo en la rama principal y al programarla o lanzarla a mano
+    if: github.event_name != 'push' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+      - run: pip install -r scraper/requirements.txt
+      - name: Recolectar
+        env:
+          DETAIL_BUDGET: "1500"
+          GEOCODE_BUDGET: "800"
+          GPX_BUDGET: "1200"
+        run: python scraper/run.py
+      - name: Auditoría de duplicados
+        run: python tools/check_dupes.py | tail -40
+      - name: Guardar datos en el repo
+        run: |
+          git config user.name "mdc-bot"
+          git config user.email "mdc-bot@users.noreply.github.com"
+          git add web/data data
+          git diff --cached --quiet || git commit -m "Datos semanales $(date -u +%Y-%m-%d)"
+          git push
+
+  deploy:
+    needs: [scrape]
+    if: always() && (needs.scrape.result == 'success' || needs.scrape.result == 'skipped') && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

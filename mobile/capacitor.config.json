@@ -1,0 +1,7 @@
+{
+  "appId": "es.montardormircomer.app",
+  "appName": "Montar Dormir Comer",
+  "webDir": "www",
+  "android": { "backgroundColor": "#EEF2F6" },
+  "server": { "androidScheme": "https" }
+}
