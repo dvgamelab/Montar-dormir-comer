@@ -2,7 +2,7 @@
 
 Calendario de **todas las pruebas de bici de España que se pueden encontrar**: marchas cicloturistas y gran fondos de carretera, BTT/MTB (rally XCO, maratón XCM, enduro, descenso, raids y pruebas por etapas), gravel, ciclocross, pruebas con e-bike y ultradistancia o bikepacking (brevets incluidos). Se vuelve a recolectar cada semana y cualquier prueba se convierte en un **plan de fin de semana**: pedalear, dormir y comer. El plan se comparte como ficha en imagen con QR y enlace.
 
-Proyecto personal, sin monetización. Hermana de [Correr · Dormir · Comer](https://github.com/dvgamelab/correr-dormir-comer), con identidad propia.
+Proyecto personal, sin monetización. **No es una red social** (nada de perfiles, seguidores, actividades ni cuentas): el objetivo es tener todas las pruebas en un sitio y encontrarlas rápido. Hermana de [Correr · Dormir · Comer](https://github.com/dvgamelab/correr-dormir-comer), con identidad propia.
 
 Web: **https://dvgamelab.github.io/Montar-dormir-comer/** · APK Android: ver más abajo.
 
@@ -134,7 +134,7 @@ tools/check_dupes.py   auditoría de duplicados
 
 ## Inspiración (qué hay en el mercado)
 - **Battistrada**: calendario europeo de marchas, con filtros por tipo de bici y categoría (maratón, ultraciclismo, bikepacking, e-bike). De ahí los chips de modalidad y el filtro de formato (marcha o competición).
-- **Komoot y Strava**: perfil de desnivel bajo el mapa, recorrido dibujado y cifras grandes (km, desnivel). Se usa igual en la ficha y en el plan.
+- **Komoot y Strava**: solo la forma de presentar un recorrido (perfil de desnivel bajo el mapa y cifras grandes de km y desnivel). Nada de su parte social.
 - **Calendarios de la RFEC y las federaciones**: modalidad y categorías como etiquetas, documentos de la prueba y aviso de «solo federados».
 - **Sportmaniacs y RockTheSport**: tarjeta de prueba con precio e inscripción directa.
 - **Airbnb y Booking**: lista y mapa sincronizados, filtrar por la zona visible y buscar alojamiento *bike friendly* primero.
