@@ -397,12 +397,12 @@ def main():
             if not rows:
                 raise RuntimeError("0 pruebas: ¿ha cambiado la web?")
             dump(os.path.join(RAW, f"{name}.json"), rows)
-            status[name] = {"ok": True, "count": len(rows), "at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            status[name] = {"ok": True, "count": len(rows), "at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "secs": round(time.time() - t0)}
         except Exception as e:  # noqa: BLE001 — una fuente caída no tumba el resto
             traceback.print_exc()
             status[name] = {**status.get(name, {}), "ok": False, "error": str(e)[:300],
-                            "failed_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"}
+                            "failed_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         dump(cpath, cache)
     dump(os.path.join(DATA, "status.json"), status)
     build(status, args.geocode_budget, args.gpx_budget)
@@ -484,7 +484,7 @@ def build(status, geocode_budget=400, gpx_budget=400):
     merged.sort(key=lambda x: (x["date"], x["name"]))
     log.info("fusiones: %d grupos · pruebas únicas: %d · %s", len(report), len(merged), dict(Counter(m["mod"] for m in merged)))
     meta = {
-        "generated": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z", "count": len(merged),
+        "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "count": len(merged),
         "sources": {k: {"label": LABEL[k], **v} for k, v in status.items() if k in LABEL},
     }
     dump(OUT, {"meta": meta, "rides": merged})
