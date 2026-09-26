@@ -1226,14 +1226,16 @@ function wrap(ctx, text, maxW, maxLines = 3) {
   return lines;
 }
 function rrect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
-function drawLogo(ctx, x, y, size) { // perfil de etapa con los tres hitos (pedalear, dormir, comer)
-  const k = size / 52; ctx.save(); ctx.translate(x - 6 * k, y - 12 * k); ctx.scale(k, k);
-  ctx.fillStyle = "#1F5BD6"; ctx.fill(new Path2D("M8 50 8 42 17 36 24 39 33 17 41 29 47 26 56 38 56 50Z"));
-  ctx.strokeStyle = "#12232E"; ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.stroke(new Path2D("M8 50H56"));
-  [["#12A37F", 17, 36], ["#6A4BD8", 33, 17], ["#F0A400", 47, 26]].forEach(([c, cx, cy]) => { ctx.beginPath(); ctx.arc(cx, cy, 4.6, 0, 7); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke(); });
-  ctx.restore();
+let LOGO_IMG = null;
+async function logoImg() { // el mismo logo de la cabecera (rueda, pizza y cielo) para la ficha en imagen
+  if (LOGO_IMG) return LOGO_IMG;
+  const img = new Image(); img.src = "logo-mark.svg";
+  try { await img.decode(); LOGO_IMG = img; } catch { /* sin logo */ }
+  return LOGO_IMG;
 }
+function drawLogo(ctx, x, y, size) { if (LOGO_IMG) ctx.drawImage(LOGO_IMG, x, y, size, size); }
 async function cardBlob(p) {
+  await logoImg();
   try { await Promise.all(["800 76px 'Saira Condensed'", "700 40px Manrope", "400 28px Manrope", "800 26px Manrope"].map(f => document.fonts.load(f))); } catch { /* fuentes del sistema */ }
   const r = p.ride, W = 1080, PAD = 64, D = pd(r.date), C = CARD, mc = C.mod[MODS[r.mod] ? r.mod : "other"];
   const url = await planURL(p);
@@ -1256,7 +1258,7 @@ async function cardBlob(p) {
   ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = C.white; ctx.fillRect(0, 0, W, 150);
   ctx.fillStyle = C.line; ctx.fillRect(0, 148, W, 2);
-  drawLogo(ctx, PAD, 36, 80);
+  drawLogo(ctx, PAD, 35, 80);
   ctx.textBaseline = "middle"; ctx.font = "800 52px 'Saira Condensed', 'Arial Narrow', sans-serif";
   let wx = PAD + 112;
   [["MONTAR", C.ink], [" · ", C.ride], ["DORMIR", C.ink], [" · ", C.sleep], ["COMER", C.ink]].forEach(([t, c]) => { ctx.fillStyle = c; ctx.fillText(t, wx, 78); wx += ctx.measureText(t).width; });

@@ -1,5 +1,5 @@
 // Service worker: app sin conexión + datos con «red primero».
-const V = "mdc-v1";
+const V = "mdc-v2";
 const SHELL = ["./", "index.html", "app.css", "vendor-leaflet.css", "app.js", "manifest.webmanifest", "icon.svg", "logo-mark.svg", "icon-192.png", "icon-512.png", "data/spain.geo.json", "data/municipios.json", "fonts/fonts.css", "fonts/SairaCondensed-700.woff2", "fonts/SairaCondensed-800.woff2", "fonts/Manrope.woff2"];
 self.addEventListener("install", e => e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())));
