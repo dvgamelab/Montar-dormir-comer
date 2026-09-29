@@ -128,6 +128,7 @@ scraper/
 web/              app estática sin build (HTML + CSS + JS + Leaflet)
   data/rides.json, data/tracks/*.json, data/municipios.json, data/spain.geo.json
   keygen/index.html  minijuego «CRANKZ Keygen» (estilo crackintro, chiptune en WebAudio)
+keygen-apk/       APK Android del minijuego (WebView mínima, sin Gradle): ./build.sh → build/crankz-keygen.apk
 mobile/           app Android (Capacitor): prepare-web.mjs copia web/ en modo app
 tools/check_dupes.py   auditoría de duplicados
 .github/workflows/weekly.yml   recolección semanal + GitHub Pages
