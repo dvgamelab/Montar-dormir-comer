@@ -144,3 +144,7 @@ tools/check_dupes.py   auditoría de duplicados
 - Alojamientos y restaurantes vienen de OpenStreetMap. En España casi ningún hotel marca en OSM si admite bicis, así que la prioridad es orientativa: pregunta al reservar.
 - Algunas pruebas no traen distancia ni track hasta que la organización los publica.
 - Revisa siempre fecha, hora, requisitos (licencia, material obligatorio) y recorrido en la web oficial.
+
+## Extra: Palomazo
+
+Minijuego gamberro en `web/juego/` (se publica en `/juego/` de la web): caza palomas de barrio con bolsas del súper. Cada lanzamiento tiene una probabilidad de captura que depende de la rareza de la paloma, la bolsa, el cebo, lo bien que lances y lo cabreada que esté. Un solo HTML, sin dependencias; la partida se guarda en el navegador.
