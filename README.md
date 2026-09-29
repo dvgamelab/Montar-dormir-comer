@@ -127,6 +127,7 @@ scraper/
   sources/*.py    un módulo por fuente: fetch(cache) -> [Ride]
 web/              app estática sin build (HTML + CSS + JS + Leaflet)
   data/rides.json, data/tracks/*.json, data/municipios.json, data/spain.geo.json
+  keygen/index.html  minijuego «CRANKZ Keygen» (estilo crackintro, chiptune en WebAudio)
 mobile/           app Android (Capacitor): prepare-web.mjs copia web/ en modo app
 tools/check_dupes.py   auditoría de duplicados
 .github/workflows/weekly.yml   recolección semanal + GitHub Pages

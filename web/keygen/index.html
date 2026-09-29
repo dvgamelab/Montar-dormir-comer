@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CRANKZ Keygen</title>
+<meta name="description" content="Minijuego rápido estilo keygen de los 90/2000: para el rodillo en el carácter correcto y crackea el serial antes de que caduque el trial.">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #000; --fg: #9f9; --dim: #3a6; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+    font-family: "Press Start 2P", ui-monospace, monospace; -webkit-tap-highlight-color: transparent; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; touch-action: manipulation;
+    max-width: 100%; box-shadow: 0 0 0 2px #1a1a1a, 0 0 40px rgba(80, 255, 160, .12); cursor: pointer; }
+  .bar { display: flex; gap: 16px; font-size: 9px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .bar a, .bar button { color: var(--dim); background: none; border: 1px solid #1f3a2a; padding: 6px 8px;
+    font: inherit; cursor: pointer; text-decoration: none; }
+  .bar a:hover, .bar button:hover { color: var(--fg); border-color: var(--dim); }
+</style>
+</head>
+<body>
+<canvas id="c" width="480" height="600" aria-label="Juego CRANKZ Keygen"></canvas>
+<div class="bar">
+  <button id="mute" type="button">♪ MÚSICA: SÍ [M]</button>
+  <a href="../">← MONTAR·DORMIR·COMER</a>
+</div>
+<script>
+"use strict";
+/* ============================================================
+   CRANKZ KEYGEN — minijuego estilo crackintro/keygen
+   Espacio / Enter / clic / toque: parar el rodillo.  M: música.
+   ============================================================ */
+const W = 480, H = 600;
+const cv = document.getElementById("c");
+const g = cv.getContext("2d");
+g.imageSmoothingEnabled = false;
+const FONT = '"Press Start 2P", monospace';
+
+function fit() {
+  const s = Math.min((innerWidth - 32) / W, (innerHeight - 60) / H);
+  const k = s >= 1 ? Math.floor(s * 2) / 2 : s;   // escalado limpio en pantallas grandes
+  cv.style.width = Math.floor(W * k) + "px";
+  cv.style.height = Math.floor(H * k) + "px";
+}
+addEventListener("resize", fit); fit();
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+/* ======================= AUDIO: mini tracker ======================= */
+const NOTE = { C: 0, "C#": 1, D: 2, "D#": 3, E: 4, F: 5, "F#": 6, G: 7, "G#": 8, A: 9, "A#": 10, B: 11 };
+const hz = n => { const m = n.match(/^([A-G]#?)(\d)$/); return 440 * Math.pow(2, (NOTE[m[1]] + (+m[2] + 1) * 12 - 69) / 12); };
+
+const Audio = {
+  ctx: null, master: null, muted: store.get("ckz_mute", false), pulse: null, noise: null,
+  step: 0, nextT: 0, bpm: 140, timer: null,
+  init() {
+    if (this.ctx) { if (this.ctx.state === "suspended") this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const c = this.ctx = new AC();
+    this.master = c.createGain(); this.master.gain.value = this.muted ? 0 : 0.5;
+    const comp = c.createDynamicsCompressor(); this.master.connect(comp); comp.connect(c.destination);
+    // onda de pulso 25 % (sonido SID/NES)
+    const N = 32, re = new Float32Array(N), im = new Float32Array(N), d = 0.25;
+    for (let n = 1; n < N; n++) re[n] = 2 * Math.sin(n * Math.PI * d) / (n * Math.PI);
+    this.pulse = c.createPeriodicWave(re, im);
+    const buf = c.createBuffer(1, c.sampleRate, c.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+    this.nextT = c.currentTime + 0.08;
+    this.timer = setInterval(() => this.tick(), 25);
+  },
+  setMute(m) {
+    this.muted = m; store.set("ckz_mute", m);
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.02);
+  },
+  tone(t, f, dur, vol, type = "pulse", slideTo) {
+    const c = this.ctx, o = c.createOscillator(), a = c.createGain();
+    if (type === "pulse") o.setPeriodicWave(this.pulse); else o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    a.gain.setValueAtTime(0.0001, t);
+    a.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+    a.gain.setValueAtTime(vol, t + dur * 0.6);
+    a.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(a); a.connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  },
+  hit(t, dur, vol, ftype, freq) {
+    const c = this.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), a = c.createGain();
+    s.buffer = this.noise; f.type = ftype; f.frequency.value = freq;
+    a.gain.setValueAtTime(vol, t); a.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(a); a.connect(this.master); s.start(t, Math.random() * 0.5); s.stop(t + dur);
+  },
+  kick(t) { this.tone(t, 160, 0.14, 0.9, "sine", 40); },
+  tick() {
+    const c = this.ctx;
+    while (this.nextT < c.currentTime + 0.12) { this.playStep(this.step, this.nextT); this.nextT += 60 / this.bpm / 4; this.step++; }
+  },
+  playStep(s, t) {
+    const sd = 60 / this.bpm / 4;
+    const bar = Math.floor(s / 16) % SONG.length, i = s % 16, sec = SONG[bar];
+    const chord = CHORDS[sec.c];
+    // bajo: octavas saltarinas en corcheas
+    if (i % 2 === 0) this.tone(t, hz(chord.bass) * (i % 4 === 2 ? 2 : 1), sd * 1.7, 0.28, "triangle");
+    // arpegio C64: tres notas por paso
+    if (sec.arp) for (let k = 0; k < 3; k++) this.tone(t + k * sd / 3, hz(chord.arp[(i * 3 + k) % 3]), sd / 3, 0.045);
+    // melodía
+    const L = sec.lead && LEAD[sec.lead][i];
+    if (L) { this.tone(t, hz(L.n), L.len * sd * 0.95, 0.11); this.tone(t + 0.012, hz(L.n) * 1.004, L.len * sd * 0.9, 0.04, "square"); }
+    // batería
+    if (sec.drums) {
+      if (i === 0 || i === 8 || (i === 10 && sec.fill)) this.kick(t);
+      if (i === 4 || i === 12 || (sec.fill && i >= 13)) this.hit(t, 0.12, 0.45, "bandpass", 1800);
+      if (i % 2 === 1) this.hit(t, 0.03, 0.18, "highpass", 7000);
+    }
+  },
+  sfx(kind, x = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + 0.005;
+    if (kind === "lock") { const f = 660 * Math.pow(2, Math.min(x, 12) / 12); this.tone(t, f, 0.06, 0.18); this.tone(t + 0.05, f * 2, 0.08, 0.14); }
+    if (kind === "perfect") { [0, 4, 7, 12].forEach((n, k) => this.tone(t + k * 0.03, 880 * Math.pow(2, n / 12), 0.05, 0.14)); }
+    if (kind === "miss") { this.tone(t, 220, 0.25, 0.3, "sawtooth", 55); this.hit(t, 0.2, 0.4, "lowpass", 900); }
+    if (kind === "crack") { ["A4", "C5", "E5", "A5", "C6", "E6", "A6"].forEach((n, k) => this.tone(t + k * 0.05, hz(n), 0.12, 0.16)); this.hit(t + 0.35, 0.3, 0.3, "highpass", 5000); }
+    if (kind === "over") { ["E5", "D5", "C5", "B4", "A4"].forEach((n, k) => this.tone(t + k * 0.12, hz(n), 0.2, 0.18)); this.tone(t + 0.6, hz("A2"), 0.6, 0.3, "triangle"); }
+    if (kind === "start") { this.tone(t, 440, 0.08, 0.15, "pulse", 1760); }
+  }
+};
+
+// Acordes: i – VI – III – VII en La menor
+const CHORDS = {
+  Am: { bass: "A2", arp: ["A4", "C5", "E5"] },
+  F:  { bass: "F2", arp: ["F4", "A4", "C5"] },
+  C:  { bass: "C3", arp: ["C5", "E5", "G5"] },
+  G:  { bass: "G2", arp: ["G4", "B4", "D5"] },
+  E:  { bass: "E2", arp: ["E4", "G#4", "B4"] },
+};
+// Melodías: nota, «-» mantiene, «.» silencio. 16 pasos por compás.
+function parseLead(str) {
+  const tk = str.trim().split(/\s+/), out = new Array(16).fill(null);
+  tk.forEach((x, i) => { if (x !== "-" && x !== ".") { let l = 1; while (tk[i + l] === "-") l++; out[i] = { n: x, len: l }; } });
+  return out;
+}
+const LEAD = {
+  a1: parseLead("A4 - C5 - E5 - A5 - - - G5 - E5 - C5 -"),
+  a2: parseLead("F5 - - - E5 - F5 - A5 - - - C6 - A5 -"),
+  a3: parseLead("G5 - - - E5 - G5 - C6 - - - B5 - G5 -"),
+  a4: parseLead("D5 - G5 - B5 - D6 - - - B5 - A5 - G5 -"),
+  b1: parseLead("E5 - E5 . E5 - D5 - C5 - D5 - E5 - A4 -"),
+  b2: parseLead("F5 - F5 . F5 - E5 - D5 - C5 - A4 - C5 -"),
+  b3: parseLead("E5 - E5 . E5 - G5 - E5 - D5 - C5 - D5 -"),
+  b4: parseLead("B4 - D5 - G5 - - - A5 - B5 - G5 - E5 -"),
+  c4: parseLead("E5 - G#5 - B5 - E6 - D6 - B5 - G#5 - E5 -"),
+};
+const SONG = [
+  { c: "Am", arp: 1 }, { c: "F", arp: 1 }, { c: "C", arp: 1, drums: 1 }, { c: "G", arp: 1, drums: 1, fill: 1 },
+  { c: "Am", arp: 1, drums: 1, lead: "a1" }, { c: "F", arp: 1, drums: 1, lead: "a2" },
+  { c: "C", arp: 1, drums: 1, lead: "a3" }, { c: "G", arp: 1, drums: 1, lead: "a4" },
+  { c: "Am", drums: 1, lead: "b1" }, { c: "F", drums: 1, lead: "b2" },
+  { c: "C", arp: 1, drums: 1, lead: "b3" }, { c: "G", arp: 1, drums: 1, lead: "b4" },
+  { c: "Am", arp: 1, drums: 1, lead: "a1" }, { c: "F", arp: 1, drums: 1, lead: "a2" },
+  { c: "C", arp: 1, drums: 1, lead: "a3" }, { c: "E", arp: 1, drums: 1, fill: 1, lead: "c4" },
+];
+
+/* ======================= JUEGO ======================= */
+const HEX = "0123456789ABCDEF";
+const PROGRAMS = [
+  "MONTAR.DORMIR.COMER PRO 1.1", "PEDALSHOP 7.0 GOLD", "WINRUEDA 3.93", "NERO BURNING BICI 6",
+  "CADENA COMMANDER 5.51", "ACDSEE-PUERTOS 4.0", "ANTIPINCHAZOS 2003", "DESNIVEL STUDIO MX",
+  "3D TRACK MAX 5", "GPX RIPPER DELUXE", "WINAMPÍRICO 2.91", "PORTABICIS PAINT XP",
+  "DORSAL MANAGER 98", "MAILLOT MAKER 8.0", "TUBELESS OFFICE 2000", "QUAKE CYCLE ARENA",
+];
+const USERS = ["CICLISTA_ANONIMO", "RUEDA_DE_ORO", "PLATO_GRANDE", "EL_GREGARIO", "DOMINGUERO_PRO", "MR.PINCHAZO"];
+const GREETS = "   *** CRANKZ *** presenta otro keygen para gente de bien ...   para el rodillo cuando pase el carácter correcto y crackea el serial antes de que caduque el TRIAL   ...   los PERFECTOS valen doble y suben el combo   ...   saludos a toda la escena ciclista: Montar Dormir Comer, Correr Dormir Comer, los gregarios del domingo, la grupeta del café y los que aún arrancan en el plato grande   ...   música chiptune hecha a mano en WebAudio, sin samples, como Dios manda   ...   recuerda: si te gusta el programa, cómpralo (y si te gusta la marcha, inscríbete)   ...   ";
+
+const S = {
+  mode: "title", t: 0, score: 0, best: store.get("ckz_best", 0), level: 1, cracked: 0,
+  time: 30, maxTime: 30, combo: 0, maxCombo: 0,
+  serial: "", slot: 0, strip: "", pos: 0, dir: 1, speed: 6,
+  prog: "", user: "", shake: 0, flash: 0, flashCol: "#fff", pops: [], parts: [], inter: 0, overAt: 0,
+};
+
+const rnd = n => Math.floor(Math.random() * n);
+const shuffle = s => { const a = s.split(""); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a.join(""); };
+
+function serialLen(lv) { return lv === 1 ? 4 : lv === 2 ? 8 : lv < 5 ? 12 : 16; }
+function newProgram() {
+  const n = serialLen(S.level);
+  S.serial = Array.from({ length: n }, () => HEX[rnd(16)]).join("");
+  S.slot = 0; S.prog = PROGRAMS[(S.level - 1) % PROGRAMS.length]; S.user = USERS[rnd(USERS.length)];
+  S.speed = Math.min(5 + S.level * 1.3, 15.5);
+  newSlot();
+}
+function newSlot() {
+  S.strip = shuffle(HEX);
+  // que el objetivo no aparezca justo en el centro al empezar
+  S.pos = rnd(16);
+  if (S.strip[Math.round(S.pos) % 16] === S.serial[S.slot]) S.pos += 5;
+  S.dir = S.level >= 5 && S.slot % 2 === 1 ? -1 : 1;
+}
+function start() {
+  Object.assign(S, { mode: "play", score: 0, level: 1, cracked: 0, time: 30, maxTime: 30, combo: 0, maxCombo: 0, pops: [], parts: [] });
+  Audio.bpm = 140; newProgram(); Audio.sfx("start");
+}
+const cur = () => { const i = ((Math.round(S.pos) % 16) + 16) % 16; return S.strip[i]; };
+
+function pop(text, x, y, col, size = 16) { S.pops.push({ text, x, y, col, size, life: 1 }); }
+function burst(x, y, col, n = 18) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 200; S.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, col }); }
+}
+
+function action() {
+  Audio.init();
+  if (S.mode === "title") return start();
+  if (S.mode === "over") { if (S.t - S.overAt > 0.8) start(); return; }
+  if (S.mode !== "play") return;
+  const target = S.serial[S.slot];
+  if (cur() === target) {
+    const off = Math.abs(S.pos - Math.round(S.pos));
+    const perfect = off < 0.2;
+    S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo);
+    const pts = (perfect ? 200 : 100) * Math.min(S.combo, 16) * (1 + (S.level - 1) * 0.25) | 0;
+    S.score += pts;
+    const sx = slotX(S.slot);
+    pop("+" + pts, sx, 270, "#ff0", 10);
+    if (perfect) { pop("PERFECTO!", 240, 420, "#0ff", 16); Audio.sfx("perfect"); S.time = Math.min(S.maxTime, S.time + 0.5); }
+    else Audio.sfx("lock", S.combo);
+    burst(240, 390, perfect ? "#0ff" : "#6f6", perfect ? 26 : 12);
+    S.slot++;
+    if (S.slot >= S.serial.length) {
+      S.cracked++;
+      const bonus = 4 + Math.min(S.level, 6);
+      S.time = Math.min(S.maxTime, S.time + bonus);
+      S.score += 1000 * S.level;
+      S.mode = "cracked"; S.inter = 1.3; S.flash = 1; S.flashCol = "#fff";
+      pop("+" + bonus + "s", 400, 184, "#0f0", 12);
+      burst(240, 280, "#ff0", 60); burst(240, 280, "#f0f", 40);
+      Audio.sfx("crack");
+    } else newSlot();
+  } else {
+    S.combo = 0; S.time -= 3; S.shake = 0.35; S.flash = 0.6; S.flashCol = "#f00";
+    pop("BAD CRC! -3s", 240, 420, "#f44", 14);
+    Audio.sfx("miss");
+    S.strip = shuffle(HEX);
+  }
+}
+
+addEventListener("keydown", e => {
+  if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); if (!e.repeat) action(); }
+  if (e.code === "KeyM") toggleMute();
+});
+cv.addEventListener("pointerdown", e => { e.preventDefault(); action(); });
+const muteBtn = document.getElementById("mute");
+function toggleMute() { Audio.init(); Audio.setMute(!Audio.muted); muteBtn.textContent = Audio.muted ? "♪ MÚSICA: NO [M]" : "♪ MÚSICA: SÍ [M]"; }
+muteBtn.addEventListener("click", e => { e.currentTarget.blur(); toggleMute(); });
+muteBtn.textContent = Audio.muted ? "♪ MÚSICA: NO [M]" : "♪ MÚSICA: SÍ [M]";
+
+function update(dt) {
+  S.t += dt;
+  S.shake = Math.max(0, S.shake - dt); S.flash = Math.max(0, S.flash - dt * 2.5);
+  for (const p of S.pops) { p.life -= dt * 1.1; p.y -= dt * 30; }
+  S.pops = S.pops.filter(p => p.life > 0);
+  for (const p of S.parts) { p.life -= dt * 1.4; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+  S.parts = S.parts.filter(p => p.life > 0);
+
+  if (S.mode === "play") {
+    let sp = S.speed;
+    if (S.level >= 3) sp *= 1 + 0.45 * Math.sin(S.t * 2.7);           // anti-debug: velocidad que respira
+    S.pos += sp * S.dir * dt;
+    S.time -= dt;
+    if (S.time <= 0) {
+      S.time = 0; S.mode = "over"; S.overAt = S.t; S.shake = 0.5;
+      if (S.score > S.best) { S.best = S.score; store.set("ckz_best", S.best); S.newBest = true; } else S.newBest = false;
+      Audio.sfx("over");
+    }
+  } else if (S.mode === "cracked") {
+    S.inter -= dt;
+    if (S.inter <= 0) { S.level++; S.mode = "play"; Audio.bpm = Math.min(140 + (S.level - 1) * 4, 176); newProgram(); }
+  }
+}
+
+/* ======================= DIBUJO ======================= */
+const stars = Array.from({ length: 140 }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() }));
+function text(s, x, y, size, col, align = "left", shadow = true) {
+  g.font = size + "px " + FONT; g.textAlign = align; g.textBaseline = "top";
+  if (shadow) { g.fillStyle = "#000"; g.fillText(s, x + Math.max(1, size / 8), y + Math.max(1, size / 8)); }
+  g.fillStyle = col; g.fillText(s, x, y);
+}
+const hue = (h, l = 60) => `hsl(${h % 360},100%,${l}%)`;
+
+function drawBg(dt) {
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  const sp = S.mode === "cracked" ? 2.2 : 0.35 + S.level * 0.05;
+  for (const s of stars) {
+    s.z -= dt * sp; if (s.z <= 0.02) { s.z = 1; s.x = Math.random() * 2 - 1; s.y = Math.random() * 2 - 1; }
+    const px = W / 2 + s.x / s.z * 120, py = H / 2 + s.y / s.z * 120;
+    if (px < 0 || px > W || py < 0 || py > H) { s.z = 1; continue; }
+    const b = 1 - s.z, sz = b > 0.7 ? 2 : 1;
+    g.fillStyle = `rgba(${150 + b * 105 | 0},${150 + b * 105 | 0},255,${b})`; g.fillRect(px | 0, py | 0, sz, sz);
+  }
+  // barras copper
+  for (let k = 0; k < 4; k++) {
+    const y = 58 + Math.sin(S.t * 1.8 + k * 0.9) * 42;
+    const h = 14, gr = g.createLinearGradient(0, y - h, 0, y + h);
+    const col = ["255,40,120", "40,200,255", "255,200,40", "120,255,80"][k];
+    gr.addColorStop(0, `rgba(${col},0)`); gr.addColorStop(0.5, `rgba(${col},0.85)`); gr.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = gr; g.fillRect(0, y - h, W, h * 2);
+  }
+}
+
+function drawLogo() {
+  const word = "CRANKZ", size = 48, cw = 62, x0 = W / 2 - (word.length * cw) / 2 + 6;
+  for (let i = 0; i < word.length; i++) {
+    const y = 34 + Math.sin(S.t * 4 + i * 0.7) * 8, x = x0 + i * cw;
+    g.font = size + "px " + FONT; g.textAlign = "left"; g.textBaseline = "top";
+    g.fillStyle = "#000"; g.fillText(word[i], x + 5, y + 5);
+    const gr = g.createLinearGradient(0, y, 0, y + size);
+    gr.addColorStop(0, "#fff"); gr.addColorStop(0.45, hue(S.t * 90 + i * 30)); gr.addColorStop(1, hue(S.t * 90 + i * 30 + 60, 35));
+    g.fillStyle = gr; g.fillText(word[i], x, y);
+  }
+  text("KEYGEN + TRIAL RESET", W / 2, 100, 8, "#aaa", "center");
+}
+
+function panel(x, y, w, h, title) {
+  g.fillStyle = "rgba(8,12,24,0.92)"; g.fillRect(x, y, w, h);
+  g.strokeStyle = "#6cf"; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  g.strokeStyle = "#135"; g.lineWidth = 1; g.strokeRect(x + 5.5, y + 5.5, w - 11, h - 11);
+  if (title) {
+    const gr = g.createLinearGradient(x, 0, x + w, 0); gr.addColorStop(0, "#036"); gr.addColorStop(1, "#08a");
+    g.fillStyle = gr; g.fillRect(x + 6, y + 6, w - 12, 16);
+    text(title, x + 12, y + 10, 8, "#fff", "left", false);
+    g.fillStyle = "#cce"; g.fillRect(x + w - 22, y + 9, 10, 10); text("x", x + w - 21, y + 10, 8, "#000", "left", false);
+  }
+}
+
+function slotX(i) {
+  const n = S.serial.length, gap = 4, groups = n / 4 - 1, cw = n > 12 ? 20 : 24;
+  const total = n * cw + groups * gap * 3;
+  return W / 2 - total / 2 + i * cw + Math.floor(i / 4) * gap * 3 + cw / 2;
+}
+
+function drawGame() {
+  panel(24, 120, W - 48, 360, "CRANKZ KEYGEN v" + (1 + S.level / 10).toFixed(1));
+  text("PROGRAMA:", 40, 150, 8, "#6cf");
+  text(S.prog, 40, 164, 8, "#fff");
+  text("USUARIO:", 40, 182, 8, "#6cf");
+  text(S.user, 120, 182, 8, "#ccc");
+  text("NIVEL " + S.level, W - 40, 150, 8, "#f8f", "right");
+
+  // barra de tiempo del trial
+  const fr = Math.max(0, S.time / S.maxTime), low = S.time < 8;
+  text("TRIAL:", 40, 202, 8, low && S.t % 0.4 < 0.2 ? "#f44" : "#6cf");
+  g.fillStyle = "#012"; g.fillRect(94, 200, 290, 12);
+  const segs = 48;
+  for (let i = 0; i < segs * fr; i++) { g.fillStyle = low ? "#f33" : i / segs < 0.5 ? "#fc3" : "#3f6"; g.fillRect(96 + i * 6, 202, 4, 8); }
+  text(S.time.toFixed(1) + "s", W - 40, 202, 8, low ? "#f66" : "#9f9", "right");
+
+  // serial
+  text("SERIAL:", 40, 222, 8, "#6cf");
+  const n = S.serial.length, cw = n > 12 ? 20 : 24;
+  g.fillStyle = "#000"; g.fillRect(36, 234, W - 72, 32);
+  for (let i = 0; i < n; i++) {
+    const x = slotX(i), done = i < S.slot || S.mode === "cracked";
+    if (i === S.slot && S.mode === "play") {
+      g.fillStyle = S.t % 0.5 < 0.25 ? "#ff0" : "#860"; g.fillRect(x - cw / 2 + 1, 238, cw - 2, 24);
+      text(S.serial[i], x, 243, 14, "#000", "center", false);
+    } else text(S.serial[i], x, 243, 14, done ? (S.mode === "cracked" ? hue(S.t * 400 + i * 25) : "#3f6") : "#345", "center", false);
+    if (i % 4 === 3 && i < n - 1) text("-", x + cw / 2 + 3, 243, 14, "#567", "center", false);
+  }
+
+  // rodillo
+  const rx = W / 2, ry = 390, rowH = 34, target = S.serial[S.slot];
+  text("BUSCA", 90, 348, 8, "#6cf", "center");
+  g.fillStyle = "#000"; g.fillRect(64, 362, 52, 52); g.strokeStyle = "#ff0"; g.lineWidth = 2; g.strokeRect(65, 363, 50, 50);
+  if (S.mode === "play") text(target, 90, 374, 24, "#ff0", "center");
+  text(S.dir > 0 ? "▼" : "▲", 390, 380, 16, S.level >= 5 ? "#f8f" : "#345", "center", false);
+  text(S.level >= 3 ? "ANTI-DEBUG" : "", 390, 404, 6, "#f8f", "center", false);
+
+  g.save(); g.beginPath(); g.rect(rx - 60, ry - rowH * 2.5, 120, rowH * 5); g.clip();
+  g.fillStyle = "#020608"; g.fillRect(rx - 60, ry - rowH * 2.5, 120, rowH * 5);
+  const base = Math.floor(S.pos), frac = S.pos - base;
+  for (let k = -3; k <= 3; k++) {
+    const idx = (((base + k) % 16) + 16) % 16, ch = S.strip[idx];
+    const yy = ry - (k - frac) * rowH;
+    const d = Math.abs(yy - ry) / (rowH * 2.5), a = Math.max(0, 1 - d);
+    const isT = ch === target && S.mode === "play";
+    g.globalAlpha = a;
+    text(ch, rx, yy - 12, 24, isT ? "#ff0" : "#8fc", "center", false);
+    g.globalAlpha = 1;
+  }
+  // brillo de monitor
+  const gr = g.createLinearGradient(0, ry - rowH * 2.5, 0, ry + rowH * 2.5);
+  gr.addColorStop(0, "rgba(2,6,8,1)"); gr.addColorStop(0.3, "rgba(2,6,8,0)"); gr.addColorStop(0.7, "rgba(2,6,8,0)"); gr.addColorStop(1, "rgba(2,6,8,1)");
+  g.fillStyle = gr; g.fillRect(rx - 60, ry - rowH * 2.5, 120, rowH * 5);
+  g.restore();
+  g.strokeStyle = "#0ff"; g.lineWidth = 2; g.strokeRect(rx - 58, ry - rowH / 2 - 2, 116, rowH + 4);
+  g.strokeStyle = "#135"; g.strokeRect(rx - 60, ry - rowH * 2.5, 120, rowH * 5);
+  text("►", rx - 76, ry - 8, 16, "#0ff", "center", false); text("◄", rx + 76, ry - 8, 16, "#0ff", "center", false);
+
+  // marcador
+  text("PUNTOS " + String(S.score).padStart(7, "0"), 40, 454, 8, "#fff");
+  text("COMBO x" + Math.min(S.combo, 16), W - 40, 454, 8, S.combo >= 8 ? hue(S.t * 500) : S.combo >= 4 ? "#ff0" : "#9f9", "right");
+
+  if (S.mode === "cracked") {
+    const s = 1 + Math.sin(S.t * 20) * 0.05;
+    g.save(); g.translate(W / 2, 300); g.scale(s, s);
+    g.fillStyle = "rgba(0,0,0,0.75)"; g.fillRect(-190, -26, 380, 52);
+    text("*** CRACKED ***", 0, -16, 20, hue(S.t * 600), "center");
+    text("REGISTRADO A " + S.user, 0, 10, 8, "#fff", "center");
+    g.restore();
+  }
+}
+
+function drawTitle() {
+  panel(24, 120, W - 48, 360, "CRANKZ KEYGEN - LEEME.NFO");
+  const lines = [
+    ["¿CÓMO SE JUEGA?", "#ff0"], ["", ""],
+    ["EL RODILLO GIRA SIN PARAR.", "#ccc"],
+    ["PÁRALO CUANDO EL CARÁCTER", "#ccc"],
+    ["QUE BUSCAS ESTÉ EN LA MIRA.", "#ccc"], ["", ""],
+    ["COMPLETA EL SERIAL ANTES", "#ccc"],
+    ["DE QUE CADUQUE EL TRIAL.", "#ccc"], ["", ""],
+    ["CENTRADO JUSTO = PERFECTO x2", "#0ff"],
+    ["FALLO = BAD CRC Y -3s", "#f66"],
+    ["CADA CRACK = TIEMPO EXTRA", "#6f6"],
+  ];
+  lines.forEach(([s, c], i) => s && text(s, W / 2, 152 + i * 16, 8, c, "center"));
+  if (S.t % 1 < 0.65) text("ESPACIO / TOCA", W / 2, 360, 16, hue(S.t * 200), "center");
+  text("PARA CRACKEAR", W / 2, 386, 12, "#fff", "center");
+  text("RÉCORD " + String(S.best).padStart(7, "0"), W / 2, 424, 8, "#f8f", "center");
+  text("[M] MÚSICA ON/OFF", W / 2, 448, 8, "#567", "center");
+}
+
+function drawOver() {
+  drawGame();
+  g.fillStyle = "rgba(0,0,0,0.8)"; g.fillRect(24, 120, W - 48, 360);
+  panel(50, 170, W - 100, 260, "ERROR");
+  text("TRIAL EXPIRED", W / 2, 204, 20, S.t % 0.6 < 0.3 ? "#f33" : "#fff", "center");
+  text("PROGRAMAS CRACKEADOS: " + S.cracked, W / 2, 250, 8, "#ccc", "center");
+  text("COMBO MÁXIMO: x" + S.maxCombo, W / 2, 268, 8, "#ccc", "center");
+  text(String(S.score).padStart(7, "0"), W / 2, 296, 24, "#ff0", "center");
+  text(S.newBest ? "¡¡NUEVO RÉCORD!!" : "RÉCORD " + String(S.best).padStart(7, "0"), W / 2, 332, 8, S.newBest ? hue(S.t * 500) : "#f8f", "center");
+  const code = "CRNK-" + (S.score * 2654435761 >>> 0).toString(16).toUpperCase().padStart(8, "0").replace(/(.{4})/, "$1-");
+  text("TU SERIAL: " + code, W / 2, 356, 8, "#6cf", "center");
+  if (S.t - S.overAt > 0.8 && S.t % 1 < 0.65) text("ESPACIO / TOCA: OTRA", W / 2, 392, 12, "#fff", "center");
+}
+
+function drawScroller() {
+  g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(0, 500, W, 100);
+  const size = 16, cw = 18, speed = 110;
+  const off = (S.t * speed) % (GREETS.length * cw);
+  g.font = size + "px " + FONT; g.textAlign = "left"; g.textBaseline = "top";
+  const first = Math.floor(off / cw);
+  for (let i = first; i < first + W / cw + 2; i++) {
+    const ch = GREETS[i % GREETS.length], x = i * cw - off, y = 540 + Math.sin(S.t * 3 + x * 0.025) * 16;
+    g.fillStyle = "#000"; g.fillText(ch, x + 2, y + 2);
+    g.fillStyle = hue(x * 0.8 + S.t * 120, 62); g.fillText(ch, x, y);
+  }
+  // reflejo
+  g.fillStyle = "rgba(20,40,90,0.25)"; g.fillRect(0, 580, W, 20);
+}
+
+function drawFx() {
+  for (const p of S.parts) { g.globalAlpha = Math.max(0, p.life); g.fillStyle = p.col; g.fillRect(p.x | 0, p.y | 0, 3, 3); }
+  g.globalAlpha = 1;
+  for (const p of S.pops) { g.globalAlpha = Math.min(1, p.life * 2); text(p.text, p.x, p.y, p.size, p.col, "center"); }
+  g.globalAlpha = 1;
+  if (S.flash > 0) { g.globalAlpha = S.flash * 0.35; g.fillStyle = S.flashCol; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+  // líneas de escaneo CRT
+  g.fillStyle = "rgba(0,0,0,0.18)"; for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  update(dt);
+  g.save();
+  if (S.shake > 0) g.translate((Math.random() - 0.5) * S.shake * 24, (Math.random() - 0.5) * S.shake * 24);
+  drawBg(dt); drawLogo();
+  if (S.mode === "title") drawTitle(); else if (S.mode === "over") drawOver(); else drawGame();
+  drawScroller(); drawFx();
+  g.restore();
+  requestAnimationFrame(frame);
+}
+// espera a la fuente pixel (máx. 1,5 s; sin red se usa monospace)
+Promise.race([document.fonts ? document.fonts.load('16px "Press Start 2P"') : null, new Promise(r => setTimeout(r, 1500))])
+  .catch(() => {}).finally(() => requestAnimationFrame(frame));
+</script>
+</body>
+</html>
