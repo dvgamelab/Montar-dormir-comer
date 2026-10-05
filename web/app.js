@@ -113,7 +113,7 @@ function saveFilters() { store.set("filters", { ...F, mods: [...F.mods], near: n
 const EMBED = !!window.MDC_EMBED, PUBLIC_URL = window.MDC_PUBLIC_URL || "";
 const APP = !!window.MDC_APP, CAP = window.Capacitor?.Plugins || {};
 async function fetchRides() {
-  const remote = window.MDC_DATA_URL; // en la APK: datos semanales publicados, con los incluidos de respaldo
+  const remote = window.MDC_DATA_URL; // en la APK: datos del día publicados, con los incluidos de respaldo
   if (remote) {
     try {
       const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 6000);

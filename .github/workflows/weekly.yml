@@ -1,8 +1,8 @@
-name: Recolectar pruebas (semanal) y publicar
+name: Recolectar pruebas (diario) y publicar
 
 on:
   schedule:
-    - cron: "17 4 * * 1"   # lunes 04:17 UTC (06:17 en España en verano)
+    - cron: "43 3 * * *"   # cada día 03:43 UTC (05:43 en España en verano); GitHub suele retrasarlo
   workflow_dispatch:        # botón «Run workflow» para lanzarlo a mano
   push:
     paths: ["web/**", ".github/workflows/weekly.yml"]
@@ -38,12 +38,27 @@ jobs:
         run: python scraper/run.py
       - name: Auditoría de duplicados
         run: python tools/check_dupes.py | tail -40
-      - name: Guardar datos en el repo
+      - name: Guardar datos en el repo (solo si han cambiado las pruebas)
         run: |
+          # si las pruebas son las mismas que ayer no se hace commit (solo cambiarían la hora y las cachés)
+          if python - <<'PY'
+          import json, subprocess, sys
+          new = json.load(open("web/data/rides.json"))["rides"]
+          try:
+              old = json.loads(subprocess.check_output(["git", "show", "HEAD:web/data/rides.json"]))["rides"]
+          except Exception:
+              old = None
+          sys.exit(0 if new == old else 1)
+          PY
+          then
+            echo "Sin cambios en las pruebas: no se guarda nada"
+            git checkout -- web/data data
+            exit 0
+          fi
           git config user.name "mdc-bot"
           git config user.email "mdc-bot@users.noreply.github.com"
           git add web/data data
-          git diff --cached --quiet || git commit -m "Datos semanales $(date -u +%Y-%m-%d)"
+          git diff --cached --quiet || git commit -m "Datos $(date -u +%Y-%m-%d)"
           git push
 
   deploy:

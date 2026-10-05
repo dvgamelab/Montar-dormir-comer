@@ -1,6 +1,6 @@
 # Montar · Dormir · Comer
 
-Calendario de **todas las pruebas de bici de España que se pueden encontrar**: marchas cicloturistas y gran fondos de carretera, BTT/MTB (rally XCO, maratón XCM, enduro, descenso, raids y pruebas por etapas), gravel, ciclocross, pruebas con e-bike y ultradistancia o bikepacking (brevets incluidos). Se vuelve a recolectar cada semana y cualquier prueba se convierte en un **plan de fin de semana**: pedalear, dormir y comer. El plan se comparte como ficha en imagen con QR y enlace.
+Calendario de **todas las pruebas de bici de España que se pueden encontrar**: marchas cicloturistas y gran fondos de carretera, BTT/MTB (rally XCO, maratón XCM, enduro, descenso, raids y pruebas por etapas), gravel, ciclocross, pruebas con e-bike y ultradistancia o bikepacking (brevets incluidos). Se vuelve a recolectar cada día y cualquier prueba se convierte en un **plan de fin de semana**: pedalear, dormir y comer. El plan se comparte como ficha en imagen con QR y enlace.
 
 Proyecto personal, sin monetización. **No es una red social** (nada de perfiles, seguidores, actividades ni cuentas): el objetivo es tener todas las pruebas en un sitio y encontrarlas rápido. Hermana de [Correr · Dormir · Comer](https://github.com/dvgamelab/correr-dormir-comer), con identidad propia.
 
@@ -101,15 +101,15 @@ python scraper/run.py --build-only     # rehace web/data/rides.json sin descarga
 cd web && python -m http.server 8000   # http://localhost:8000
 ```
 
-### Publicado y actualizado cada semana (GitHub Pages)
-`.github/workflows/weekly.yml` se ejecuta **cada lunes a las 04:17 UTC**. Recolecta, guarda los datos en el repo y publica `web/` en GitHub Pages. También se puede lanzar a mano con *Run workflow*. Los pasos para activarlo desde el móvil están en `docs/ACTIVAR.md`.
+### Publicado y actualizado cada día (GitHub Pages)
+`.github/workflows/weekly.yml` se ejecuta **cada día a las 03:43 UTC** (GitHub suele retrasarlo unas horas). Recolecta, guarda los datos en el repo solo si las pruebas han cambiado y publica `web/` en GitHub Pages. También se puede lanzar a mano con *Run workflow*. Los pasos para activarlo desde el móvil están en `docs/ACTIVAR.md`.
 
 ## App Android (APK)
 
 `mobile/` es un proyecto [Capacitor 7](https://capacitorjs.com) con la web dentro: id `es.montardormircomer.app`, vertical, con icono y pantalla de inicio propios.
 
 - Lleva dentro las pruebas, los tracks, Leaflet y el generador de QR, así que funciona sin conexión.
-- Con internet, al abrirse descarga `rides.json` de GitHub Pages: los datos semanales llegan sin reinstalar.
+- Con internet, al abrirse descarga `rides.json` de GitHub Pages: los datos del día llegan sin reinstalar.
 - Compartir usa el menú nativo. Los enlaces se abren en el navegador. «Usar mi ubicación» pide permiso de GPS.
 
 ```bash
@@ -129,7 +129,7 @@ web/              app estática sin build (HTML + CSS + JS + Leaflet)
   data/rides.json, data/tracks/*.json, data/municipios.json, data/spain.geo.json
 mobile/           app Android (Capacitor): prepare-web.mjs copia web/ en modo app
 tools/check_dupes.py   auditoría de duplicados
-.github/workflows/weekly.yml   recolección semanal + GitHub Pages
+.github/workflows/weekly.yml   recolección diaria + GitHub Pages
 ```
 
 ## Inspiración (qué hay en el mercado)

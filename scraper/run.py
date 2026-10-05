@@ -1,4 +1,4 @@
-"""Recolector semanal de pruebas de bici de España.
+"""Recolector diario de pruebas de bici de España.
 
     python scraper/run.py                        # todas las fuentes
     python scraper/run.py --only federaciones    # una fuente (el resto usa su último volcado)
