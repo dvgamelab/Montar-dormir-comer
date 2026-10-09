@@ -70,6 +70,12 @@ const F = { q: "", mods: new Set(), ebike: false, fmt: "", when: "all", from: ""
   ccaa: "", prov: "", near: null, nearKm: 50, fav: false, mapOnly: false, onlyTrack: false, showOff: false, searchKm: 30, ...store.get("filters", {}) };
 F.mods = new Set(F.mods || []);
 let favs = new Set(store.get("favs", []));
+// ---- novedades y alertas
+const NEW_DAYS = 7;
+let alerts = store.get("alerts", []), alertMode = store.get("alertMode", "all");
+let lastVisit = store.get("lastVisit", null), newSinceVisit = [], lastVisitKey = "";
+const newCutoff = () => new Date(Date.now() - NEW_DAYS * 864e5).toISOString().slice(0, 16);
+const isNew = r => !!r.added && r.added >= newCutoff();
 let plans = store.get("plans", {});
 let filtered = [], shown = 0, selId = null, SEARCH = null, SEARCH_PROV = "";
 const PAGE = 120;
@@ -112,16 +118,23 @@ function saveFilters() { store.set("filters", { ...F, mods: [...F.mods], near: n
 // ------------------------------------------------------------------ carga
 const EMBED = !!window.MDC_EMBED, PUBLIC_URL = window.MDC_PUBLIC_URL || "";
 const APP = !!window.MDC_APP, CAP = window.Capacitor?.Plugins || {};
-async function fetchRides() {
-  const remote = window.MDC_DATA_URL; // en la APK: datos del día publicados, con los incluidos de respaldo
+async function fetchRides() { // usa el conjunto más reciente: el publicado o el incluido en la app
+  const local = fetch("data/rides.json", { cache: "no-cache" }).then(r => r.json()).catch(() => null);
+  const remote = window.MDC_DATA_URL;
+  let d = null;
   if (remote) {
     try {
       const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 6000);
-      const r = await fetch(remote, { cache: "no-cache", signal: ctl.signal }).finally(() => clearTimeout(to));
-      if (r.ok) { const d = await r.json(); if (d.rides?.length) return d; }
+      const r = await fetch(`${remote}?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal }).finally(() => clearTimeout(to));
+      if (r.ok) { const j = await r.json(); if (j.rides?.length) d = j; }
     } catch { /* sin conexión: datos incluidos */ }
   }
-  return (await fetch("data/rides.json", { cache: "no-cache" })).json();
+  const l = await local;
+  // datos publicados sin fechas de alta = recogida antigua: mejor los incluidos en la app
+  const hasAdded = x => !!x?.rides?.some(r => r.added);
+  if (!d || (l?.rides?.length && ((hasAdded(l) && !hasAdded(d)) || (l.meta?.generated || "") > (d.meta?.generated || "")))) d = l;
+  if (!d) throw new Error("sin datos");
+  return d;
 }
 async function load() {
   try {
@@ -138,6 +151,7 @@ async function load() {
   for (const [n, la, lo] of CAPITALS) addPlace(n, la, lo, "");
   const cc = [...new Set(RIDES.map(r => r.ccaa).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
   $("#ccaa").insertAdjacentHTML("beforeend", cc.map(c => `<option>${esc(c)}</option>`).join(""));
+  initNews();
   fillProvinces(); renderFoot(); syncFilterUI(); initMap(); apply(); handleIncomingPlan(); loadPlaces();
 }
 const CAPITALS = [["Madrid", 40.4168, -3.7038], ["Barcelona", 41.3874, 2.1686], ["Valencia", 39.4699, -0.3763], ["Sevilla", 37.3891, -5.9845], ["Zaragoza", 41.6488, -0.8891], ["Málaga", 36.7213, -4.4214], ["Murcia", 37.9922, -1.1307], ["Palma", 39.5696, 2.6502], ["Bilbao", 43.263, -2.935], ["Alicante", 38.3452, -0.481], ["Córdoba", 37.8882, -4.7794], ["Valladolid", 41.6523, -4.7245], ["Vigo", 42.2406, -8.7207], ["Gijón", 43.5322, -5.6611], ["A Coruña", 43.3623, -8.4115], ["Granada", 37.1773, -3.5986], ["Vitoria-Gasteiz", 42.8467, -2.6716], ["Oviedo", 43.3614, -5.8593], ["Pamplona", 42.8125, -1.6458], ["Santander", 43.4623, -3.81], ["San Sebastián", 43.3183, -1.9812], ["Logroño", 42.4627, -2.445], ["Girona", 41.9794, 2.8214], ["Lleida", 41.6176, 0.62], ["Tarragona", 41.1189, 1.2445], ["Castellón de la Plana", 39.9864, -0.0513], ["Santa Cruz de Tenerife", 28.4636, -16.2518], ["Las Palmas de Gran Canaria", 28.1235, -15.4363]];
@@ -184,6 +198,7 @@ function apply() {
   const place = F.q ? findPlace(F.q) : null;
   SEARCH = place ? { place, R: F.searchKm || 30 } : null;
   if (SEARCH) q = [];
+  let newHere = 0;
   filtered = RIDES.filter(r => {
     if ((r.end || r.date) < a || r.date > b) return false;
     if (r.x && !F.showOff) return false;
@@ -214,11 +229,14 @@ function apply() {
       if (r._d > F.nearKm) return false;
     } else { r._d = null; r._grp = null; }
     if (bounds && (!r.lat || !bounds.contains([r.lat, r.lon]))) return false;
+    if (isNew(r)) newHere++; // novedades que cumplen el resto de filtros (número del chip)
+    else if (F.newOnly) return false;
     return true;
   });
   if (SEARCH) filtered.sort((x, y) => (x._grp === y._grp ? 0 : x._grp === "in" ? -1 : 1) || (x._grp === "near" ? x._d - y._d : 0) || x.date.localeCompare(y.date));
+  if (F.newOnly && !SEARCH) filtered.sort((x, y) => y.added.localeCompare(x.added) || x.date.localeCompare(y.date));
   shown = 0;
-  $("#list").innerHTML = SEARCH ? searchBanner() : "";
+  $("#list").innerHTML = SEARCH ? searchBanner() : newsBanner();
   renderMore();
   const n = filtered.length;
   $("#count").innerHTML = `<span class="num">${n.toLocaleString("es-ES")}</span><span class="lbl">${n === 1 ? "prueba" : "pruebas"}${F.fav ? " favoritas" : ""}</span>`;
@@ -226,6 +244,8 @@ function apply() {
   $("#filtersBadge").hidden = !(F.when !== "all" || F.ccaa || F.prov || F.near || F.mapOnly || F.kmMin || F.kmMax || F.upMin || F.upMax || F.onlyTrack || F.showOff);
   $$(".chip[data-when]").forEach(x => x.classList.toggle("on", F.when === x.dataset.when));
   $$(".chip[data-fmt]").forEach(x => x.classList.toggle("on", F.fmt === x.dataset.fmt));
+  $(".chip[data-new]").classList.toggle("on", !!F.newOnly);
+  $("#newCount").textContent = newHere;
   drawMarkers();
   if (map && !$("#viewMap").hidden && !F.mapOnly) { mapTouched = false; fitToResults(); }
   saveFilters();
@@ -284,7 +304,7 @@ function bindFilters() {
   $("#nearKm").addEventListener("change", e => { F.nearKm = +e.target.value; apply(); });
   $("#mapFilter").addEventListener("change", e => { F.mapOnly = e.target.checked; apply(); });
   $("#clearFilters").addEventListener("click", () => {
-    Object.assign(F, { q: "", fmt: "", ebike: false, when: "all", from: "", to: "", kmMin: 0, kmMax: 0, upMin: 0, upMax: 0, ccaa: "", prov: "", near: null, mapOnly: false, onlyTrack: false, showOff: false });
+    Object.assign(F, { q: "", newOnly: false, fmt: "", ebike: false, when: "all", from: "", to: "", kmMin: 0, kmMax: 0, upMin: 0, upMax: 0, ccaa: "", prov: "", near: null, mapOnly: false, onlyTrack: false, showOff: false });
     F.mods.clear(); $("#nearTown").value = ""; syncFilterUI(); apply();
   });
   $("#more").addEventListener("click", renderMore);
@@ -299,6 +319,87 @@ async function useGps() {
   }
   if (!navigator.geolocation) return fail();
   navigator.geolocation.getCurrentPosition(p => done(p.coords.latitude, p.coords.longitude), fail, { timeout: 10000, maximumAge: 600000 });
+}
+// ------------------------------------------------------------------ novedades y alertas
+function newsBanner() {
+  if (F.newOnly) return `<div class="news-banner info"><b>Pruebas añadidas en los últimos ${NEW_DAYS} días</b><span class="small muted">De la más reciente a la más antigua. Se buscan pruebas nuevas cada día.</span></div>`;
+  if (!newSinceVisit.length || store.get("bannerSeen", "") === lastVisitKey) return "";
+  const mine = alerts.length ? newSinceVisit.filter(r => alerts.some(a => matchAlert(r, a))) : [];
+  return `<div class="news-banner" id="newsBanner"><div><b>${newSinceVisit.length} ${newSinceVisit.length === 1 ? "prueba nueva" : "pruebas nuevas"} desde tu última visita</b>
+    ${mine.length ? `<span class="small">${mine.length} encaja${mine.length === 1 ? "" : "n"} con tus alertas</span>` : ""}</div>
+    <div class="nb-actions"><button class="btn primary small" type="button" data-see-new>Ver</button><button class="x small-x" type="button" data-close-banner aria-label="Cerrar">✕</button></div></div>`;
+}
+function initNews() {
+  lastVisitKey = lastVisit || "";
+  newSinceVisit = lastVisit ? RIDES.filter(r => r.added && r.added > lastVisit) : [];
+  store.set("lastVisit", new Date().toISOString().slice(0, 16)); // la próxima vez solo cuenta lo que aparezca desde ahora
+  renderAlerts(); syncNotifier();
+  if (APP && alertMode !== "off" && !store.get("notifAsked", false)) { store.set("notifAsked", true); setTimeout(askNotifyPermission, 1500); }
+}
+// alertas: filtros guardados que avisan cuando aparece una prueba nueva que encaja (misma lógica en mobile/runners/check.js)
+function matchAlert(r, a) {
+  const mod = MODS[r.mod] ? r.mod : "other";
+  if ((a.mods?.length || a.ebike) && !(a.mods?.includes(mod) || (a.ebike && (r.ebike || r.mod === "ebike")))) return false;
+  if (a.fmt && r.fmt !== a.fmt) return false;
+  if (a.kmMin || a.kmMax) { const ds = r.dist || []; if (!ds.some(d => d >= (a.kmMin || 0) && d <= (a.kmMax || 1e9))) return false; }
+  if (a.upMin || a.upMax) { if (!r.elev || r.elev < (a.upMin || 0) || r.elev > (a.upMax || 1e9)) return false; }
+  if (a.ccaa && r.ccaa !== a.ccaa) return false;
+  if (a.prov && r.province !== a.prov) return false;
+  if (a.near && (!r.lat || haversine(a.near.lat, a.near.lon, r.lat, r.lon) > a.nearKm)) return false;
+  if (a.q) { const s = fold(`${r.name} ${r.city || ""} ${r.province || ""}`); if (!fold(a.q).split(/\s+/).filter(Boolean).every(w => s.includes(w))) return false; }
+  return true;
+}
+function alertLabel(a) {
+  const parts = [];
+  const mods = [...(a.mods || []).map(m => MODS[m]?.label || m), ...(a.ebike ? ["E-bike"] : [])];
+  if (mods.length) parts.push(mods.join(" o "));
+  if (a.fmt) parts.push(a.fmt === "comp" ? "Competición" : "Marchas");
+  if (a.kmMin || a.kmMax) parts.push(a.kmMax ? `${a.kmMin || 0}–${a.kmMax} km` : `desde ${a.kmMin} km`);
+  if (a.upMin || a.upMax) parts.push(a.upMax ? `+${a.upMin || 0}–${a.upMax} m` : `desde +${a.upMin} m`);
+  if (a.q) parts.push(`«${a.q}»`);
+  if (a.near) parts.push(`a ${a.nearKm} km de ${a.near.name}`); else if (a.prov) parts.push(a.prov); else if (a.ccaa) parts.push(a.ccaa);
+  return parts.join(" · ") || "Cualquier prueba";
+}
+function renderAlerts() {
+  const box = $("#alertsList"); if (!box) return;
+  box.innerHTML = alerts.length ? alerts.map(a => `<div class="alert-row"><span>🔔 ${esc(alertLabel(a))}</span><button class="x small-x" type="button" data-del-alert="${a.id}" aria-label="Borrar alerta">✕</button></div>`).join("")
+    : `<p class="small muted" style="margin:0">Todavía no tienes alertas.</p>`;
+  $$("input[name=amode]").forEach(i => (i.checked = i.value === alertMode));
+}
+async function askNotifyPermission() {
+  const br = CAP.BackgroundRunner;
+  if (!APP || !br) return;
+  try { await br.requestPermissions({ apis: ["notifications"] }); } catch { /* el usuario puede negarlo */ }
+}
+function syncNotifier() { // pasa modo y alertas a la tarea en segundo plano de la APK
+  const br = CAP.BackgroundRunner;
+  if (!APP || !br) return;
+  const since = RIDES.reduce((m, r) => (r.added && r.added > m ? r.added : m), "");
+  br.dispatchEvent({ label: "es.montardormircomer.app.novedades", event: "setPrefs",
+    details: { mode: alertMode, alerts, since, newsUrl: (PUBLIC_URL || "https://dvgamelab.github.io/Montar-dormir-comer/") + "data/news.json" } }).catch(() => {});
+}
+function bindAlerts() {
+  $("#addAlert").onclick = async () => {
+    const a = { id: Math.random().toString(36).slice(2, 8), mods: [...F.mods], ebike: F.ebike, fmt: F.fmt, kmMin: F.kmMin, kmMax: F.kmMax, upMin: F.upMin, upMax: F.upMax,
+      ccaa: F.ccaa, prov: F.prov, near: F.near ? { name: F.near.name, lat: F.near.lat, lon: F.near.lon } : null, nearKm: F.nearKm, q: SEARCH ? "" : F.q.trim() };
+    if (SEARCH) { a.near = { name: SEARCH.place.name, lat: SEARCH.place.lat, lon: SEARCH.place.lon }; a.nearKm = SEARCH.R; }
+    if (alerts.some(x => alertLabel(x) === alertLabel(a))) return toast("Ya tienes esa alerta");
+    alerts.push(a); store.set("alerts", alerts);
+    if (alertMode !== "alerts") { alertMode = "alerts"; store.set("alertMode", alertMode); }
+    renderAlerts(); syncNotifier(); await askNotifyPermission();
+    toast(`Alerta creada: ${alertLabel(a)}`);
+  };
+  $("#alertsList").onclick = e => {
+    const b = e.target.closest("[data-del-alert]"); if (!b) return;
+    alerts = alerts.filter(a => a.id !== b.dataset.delAlert); store.set("alerts", alerts); renderAlerts(); syncNotifier();
+  };
+  $$("input[name=amode]").forEach(i => i.onchange = async () => { alertMode = i.value; store.set("alertMode", alertMode); syncNotifier(); if (alertMode !== "off") await askNotifyPermission(); });
+  $(".chip[data-new]").onclick = () => { F.newOnly = !F.newOnly; $("#viewList").scrollTop = 0; apply(); };
+  $("#list").addEventListener("click", e => {
+    if (e.target.closest("[data-see-new]")) { store.set("bannerSeen", lastVisitKey); F.newOnly = true; $("#viewList").scrollTop = 0; apply(); }
+    else if (e.target.closest("[data-close-banner]")) { store.set("bannerSeen", lastVisitKey); $("#newsBanner")?.remove(); }
+  });
+  if (!APP) $("#alertsHelp").textContent = "Se buscan pruebas nuevas cada día. Crea alertas con los filtros de arriba: al abrir la app verás las novedades que encajan. Los avisos en el móvil funcionan en la app de Android.";
 }
 function openFilterSheet(on) { $("#filterSheet").hidden = !on; $("#scrim").hidden = !on; }
 
@@ -329,7 +430,7 @@ function cardHTML(r) {
     <div class="bib mc-${m}"><span class="d">${d.getDate()}</span><span class="m">${DAYS[d.getDay()]}<br>${MONTHS[d.getMonth()]}</span></div>
     <div>
       <h3>${esc(r.name)}</h3>
-      <div class="where"><span class="pill m-${m}">${esc(r.disc || MODS[m].label)}</span>${r.x ? `<span class="off-tag">Suspendida</span>` : ""}<span>${esc(where || "Lugar por confirmar")}</span>${r._d != null && r._grp !== "in" ? `<span class="away">a ${fmtKm(r._d)}</span>` : ""}</div>
+      <div class="where"><span class="pill m-${m}">${esc(r.disc || MODS[m].label)}</span>${isNew(r) ? `<span class="new-badge">NUEVA</span>` : ""}${r.x ? `<span class="off-tag">Suspendida</span>` : ""}<span>${esc(where || "Lugar por confirmar")}</span>${r._d != null && r._grp !== "in" ? `<span class="away">a ${fmtKm(r._d)}</span>` : ""}</div>
       ${stats ? `<div class="stats">${stats}</div>` : ""}
     </div>
     <button class="fav${favs.has(r.id) ? " on" : ""}" data-fav="${r.id}" type="button" aria-label="Favorita" aria-pressed="${favs.has(r.id)}">${favs.has(r.id) ? "♥" : "♡"}</button>
@@ -345,9 +446,13 @@ function searchBanner() {
     ${nIn ? "" : `<p class="small muted" style="margin:6px 0 0">No hay pruebas en ${esc(place.name)} con estos filtros; te enseño las cercanas.</p>`}
   </div>`;
 }
-function groupOf(r) { return SEARCH ? r._grp : weekKey(r.date); }
+function groupOf(r) { return SEARCH ? r._grp : F.newOnly ? "n" + r.added.slice(0, 10) : weekKey(r.date); }
 function groupHeader(g) {
   const n = filtered.filter(x => groupOf(x) === g).length;
+  if (!SEARCH && g[0] === "n") {
+    const d = g.slice(1), t = iso(new Date()), y = addDays(t, -1);
+    return `<h2 class="wk-h new-h">${d === t ? "Añadidas hoy" : d === y ? "Añadidas ayer" : `Añadidas el ${fmtShort(d)}`}<span class="n">${n}</span></h2>`;
+  }
   if (!SEARCH) return `<h2 class="wk-h">${weekLabel(g)}<span class="n">${n}</span></h2>`;
   const pl = SEARCH.place.name;
   return g === "in"
@@ -356,7 +461,7 @@ function groupHeader(g) {
 }
 function renderMore() {
   const list = $("#list");
-  if (!filtered.length) { list.insertAdjacentHTML("beforeend", `<p class="empty">Ninguna prueba con esos filtros. Prueba a ampliar fechas, distancia o radio.</p>`); $("#more").hidden = true; return; }
+  if (!filtered.length) { list.insertAdjacentHTML("beforeend", `<p class="empty">${F.newOnly ? `No hay pruebas añadidas en los últimos ${NEW_DAYS} días con esos filtros.` : "Ninguna prueba con esos filtros. Prueba a ampliar fechas, distancia o radio."}</p>`); $("#more").hidden = true; return; }
   const slice = filtered.slice(shown, shown + PAGE);
   const lastEl = [...list.children].reverse().find(x => x.classList.contains("wk"));
   let html = "", lastG = lastEl?.dataset.wk, group = null;
@@ -500,6 +605,7 @@ function handleBack() {
   const tab = $(".tabbar button.on")?.dataset.view;
   if (tab && tab !== "list") { setTab("list"); return true; }
   if (F.q) { F.q = ""; $("#q").value = ""; apply(); return true; }
+  if (F.newOnly) { F.newOnly = false; apply(); return true; }
   if (Date.now() - lastBack < 2000) return false;
   lastBack = Date.now(); toast("Pulsa atrás otra vez para salir"); return true;
 }
@@ -1464,7 +1570,7 @@ window.__mdc = { get map() { return map; }, get filtered() { return filtered; },
 
 function init() {
   $("#plansCount").textContent = Object.keys(plans).length;
-  bindFilters(); bindList();
+  bindFilters(); bindList(); bindAlerts();
   $("#brandLink").onclick = e => { e.preventDefault(); setTab("list"); $("#viewList").scrollTop = 0; };
   F.fav = false;
   $$(".tabbar button").forEach(b => b.onclick = () => setTab(b.dataset.view));

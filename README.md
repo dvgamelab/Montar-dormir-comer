@@ -29,6 +29,13 @@ Web: **https://dvgamelab.github.io/Montar-dormir-comer/** · APK Android: ver m�
   - aviso si es **solo para federados** o si necesitas **licencia de día**;
   - reglamento y rutómetro, enlace al GPX, web oficial e inscripción.
 
+**Novedades y avisos**
+- Chip **Novedades** (el primero) con el número de pruebas añadidas en los últimos 7 días que cumplen el resto de filtros. Al tocarlo, la lista se ordena por día de alta («Añadidas hoy», «ayer»…). Las pruebas nuevas llevan la etiqueta **NUEVA**.
+- Al abrir la app, un aviso cuenta las pruebas nuevas **desde tu última visita** y cuántas encajan con tus alertas.
+- **Alertas** (en Filtros): guardan la combinación de filtros actual (modalidad, tipo, km, desnivel, zona, cerca de, texto). Se elige qué avisar: solo mis alertas, todas las nuevas o nada.
+- En la **APK**, una tarea en segundo plano (`mobile/runners/check.js`, cada 6 horas) lee `data/news.json` y manda una **notificación** con las pruebas nuevas que encajan. En iPhone y en la web no hay notificaciones (necesitarían servidor): las novedades se ven al abrir.
+- Una prueba es nueva solo si **todas** sus fichas son nuevas: si ya estaba en otra fuente, no cuenta. La fecha de alta de cada ficha se guarda en `data/seen.json`; `tools/backfill_seen.py` la reconstruye con el historial de git.
+
 **Plan de fin de semana (pedalear → dormir → comer)**
 - «Planificar finde» abre un **borrador**. No entra en «Mis planes» hasta pulsar **Guardar plan**. Si sales con cambios sin guardar, la app pregunta: *Guardar y salir / Salir sin guardar / Seguir editando*.
 - **Pedalear**:
@@ -77,7 +84,8 @@ Web: **https://dvgamelab.github.io/Montar-dormir-comer/** · APK Android: ver m�
   - Las palabras de ciclismo («marcha», «BTT», «gran fondo», «trofeo»…) y las que aparecen en muchas pruebas no cuentan.
   - Nunca se unen dos sitios fiables a más de 30 km, recorridos con distancias incompatibles (Máster 30 y Máster 60 del mismo día), ni una prueba de BTT y otra de gravel en días distintos.
   - Cada ejecución deja `data/dedupe_report.json` con qué se ha unido y por qué. `python tools/check_dupes.py` lista posibles duplicados sin unir y fusiones dudosas.
-- Si una fuente falla, se reutiliza su último volcado (`data/raw/*.json`) y el pie de la lista lo indica.
+- Si una fuente falla, o devuelve de golpe menos del 60 % de lo que traía, se reutiliza su último volcado (`data/raw/*.json`) y el pie de la lista lo indica.
+- Las pruebas con «Anul·lada», «Suspendida» o «Aplazada» en el nombre se marcan como suspendidas (se ocultan salvo que se pidan en Filtros).
 - Los calendarios federativos publican la temporada en curso. Los del año siguiente se leen solos en cuanto aparecen (suele ser entre diciembre y febrero), así que en otoño la lista es más corta.
 
 **Fuentes probadas que no se usan:**

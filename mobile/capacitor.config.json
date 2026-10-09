@@ -2,6 +2,20 @@
   "appId": "es.montardormircomer.app",
   "appName": "Montar Dormir Comer",
   "webDir": "www",
-  "android": { "backgroundColor": "#EEF2F6" },
-  "server": { "androidScheme": "https" }
+  "android": {
+    "backgroundColor": "#EEF2F6"
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BackgroundRunner": {
+      "label": "es.montardormircomer.app.novedades",
+      "src": "runners/check.js",
+      "event": "checkNew",
+      "repeat": true,
+      "interval": 360,
+      "autoStart": true
+    }
+  }
 }

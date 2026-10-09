@@ -366,9 +366,47 @@ def merge(c):
         "reg": html.unescape(first("registration")), "gpx": first("gpx"), "trk": first("trk"), "docs": docs[:5], "price": first("price"),
         "fed": any(x.get("fed_only") for x in c), "club": tidy(first("club")), "img": html.unescape(first("image")),
         "desc": first("description")[:300], "ebike": any(re.search(r"e ?bike|electric", fold(f'{x["name"]} {x.get("categories", "")} {x.get("kind", "")}')) for x in c),
-        "x": all(x.get("cancelled") for x in c), "src": srcs,
+        "x": all(x.get("cancelled") for x in c), "src": srcs, "_keys": [seen_key(x) for x in c],
     }
     return {k: v for k, v in out.items() if v not in ("", None, [], False)}
+
+
+# Fuentes cuyo enlace es una página común a muchas pruebas (blogs): la ficha se identifica por nombre y fecha.
+SHARED_URL = {"pedalesyzapatillas", "alltricks"}
+
+
+def seen_key(x):
+    if x["source"] in SHARED_URL:
+        return f'{x["source"]}|{name_key(x["name"])}|{x["date"][:7]}'
+    return x["source_url"]
+
+
+NEWS = os.path.join(ROOT, "web", "data", "news.json")
+SEEN = os.path.join(DATA, "seen.json")
+
+
+def mark_new(merged, now=None):
+    """Fecha en que cada prueba apareció por primera vez (por sus fichas en las fuentes).
+
+    Una prueba es nueva solo si TODAS sus fichas son nuevas: si ya estaba en otra web, no cuenta.
+    Escribe web/data/news.json (lo añadido en los últimos 30 días), que leen la app y los avisos de la APK."""
+    now = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    seen = load(SEEN, None)
+    first_run = seen is None
+    seen = seen or {}
+    for m in merged:
+        keys = m.pop("_keys", [])
+        for k in keys:
+            seen.setdefault(k, "base" if first_run else now)
+        vals = [seen[k] for k in keys]
+        if vals and "base" not in vals:
+            m["added"] = min(vals)
+    dump(SEEN, seen)
+    cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%MZ")
+    keep = ("id", "name", "date", "end", "time", "city", "province", "ccaa", "mod", "disc", "fmt", "dist", "elev", "ebike", "lat", "lon", "added")
+    news = sorted((m for m in merged if m.get("added", "") >= cutoff), key=lambda m: m["added"], reverse=True)
+    dump(NEWS, {"generated": now, "rides": [{k: m[k] for k in keep if k in m} for m in news]})
+    log.info("novedades: %d pruebas nuevas en los últimos 30 días", len(news))
 
 
 # ------------------------------------------------------------------ main
@@ -396,6 +434,9 @@ def main():
             rows = [r.to_dict() for r in mod.fetch(cache, max_details=args.details)]
             if not rows:
                 raise RuntimeError("0 pruebas: ¿ha cambiado la web?")
+            prev = len(load(os.path.join(RAW, f"{name}.json"), []))
+            if prev >= 50 and len(rows) < prev * 0.6:  # caída brusca = bloqueo o web cambiada: no perder datos buenos
+                raise RuntimeError(f"solo {len(rows)} pruebas frente a {prev} la vez anterior; se conservan los datos previos")
             dump(os.path.join(RAW, f"{name}.json"), rows)
             status[name] = {"ok": True, "count": len(rows), "at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             "secs": round(time.time() - t0)}
@@ -423,6 +464,10 @@ def build(status, geocode_budget=400, gpx_budget=400):
                 dropped[name] += 1
                 continue
             r["mod"], r["disc"], r["fmt"] = cl
+            off = re.search(r"[\s(*-]*\b(anul[·.l]?lad[ao]|anulad[ao]|suspendid[ao]|suspes[ao]?|aplazad[ao]|cancelad[ao]|ajornad[ao])\b[\s)*]*", r["name"], re.I)
+            if off:
+                r["cancelled"] = True
+                r["name"] = (r["name"][:off.start()] + " " + r["name"][off.end():]).strip(" -·*")
             if r["mod"] == "other":  # «Berrea Bike Experience»: la descripción o las inscripciones dicen si es BTT, gravel…
                 cl2 = classify(f'{r["name"]} {r.get("kind", "")}', r.get("description", ""), r.get("categories", ""))
                 if cl2 and cl2[0] != "other":
@@ -483,6 +528,7 @@ def build(status, geocode_budget=400, gpx_budget=400):
     dump(os.path.join(DATA, "dedupe_report.json"), report)
     merged.sort(key=lambda x: (x["date"], x["name"]))
     log.info("fusiones: %d grupos · pruebas únicas: %d · %s", len(report), len(merged), dict(Counter(m["mod"] for m in merged)))
+    mark_new(merged)
     meta = {
         "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "count": len(merged),
         "sources": {k: {"label": LABEL[k], **v} for k, v in status.items() if k in LABEL},
