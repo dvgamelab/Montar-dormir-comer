@@ -65,8 +65,8 @@ Web: **https://dvgamelab.github.io/Montar-dormir-comer/** · APK Android: ver m�
 |---|---|
 | **[RFEC](https://rfec.com/index.php/es/smartweb/seccion/calendario/rfec/2026) + 17 federaciones autonómicas** | Andalucía, Aragón, Asturias, Baleares, Canarias, Cantabria, Castilla-La Mancha, Castilla y León, Extremadura, Galicia, Madrid, Murcia, Navarra, País Vasco, La Rioja, C. Valenciana y Melilla. Comparten plataforma, así que un solo lector sirve para todas. De cada prueba: modalidad, categorías, club, track GPX/KMZ, rutómetro y reglamento. De su página de inscripción: hora, precio, plazas y si es solo para federados |
 | **[Federació Catalana](https://www.ciclisme.cat/calendari/tot)** | Todo el calendario catalán, con coordenadas de la salida, km, track y documentación |
-| **[Sportmaniacs](https://sportmaniacs.com/es/races)** | Pruebas con inscripción en la plataforma. Solo se quedan las que son claramente de bici. Aporta provincia, precios y modalidades de inscripción |
-| **[Global-Tempo](https://www.global-tempo.com/)** | Marchas de BTT y cicloturistas de Andalucía oriental, con distancia, desnivel y precio |
+| **[Ciclink](https://ciclink.es/calendario/)** | Calendario de marchas cicloturistas, gran fondos y gravel (API de WordPress + ficha de cada prueba): fecha exacta, hora, localidad, web oficial y cartel |
+| **[Ciclo21](https://www.ciclo21.com/calendario-cx-2026-2027/)** | Calendario de ciclocross de la temporada: las pruebas UCI y el Campeonato de España que se corren en España |
 | **[Pedales y Zapatillas](https://www.pedalesyzapatillas.com/)** | Calendario anual de BTT, gravel, cicloturistas y bikepacking, con la web oficial |
 | **[Alltricks](https://www.alltricks.es/blog/article/calendario-de-marchas-cicloturistas)** | Grandes marchas, gran fondos y gravel, con su distancia |
 
@@ -84,12 +84,15 @@ Web: **https://dvgamelab.github.io/Montar-dormir-comer/** · APK Android: ver m�
   - Las palabras de ciclismo («marcha», «BTT», «gran fondo», «trofeo»…) y las que aparecen en muchas pruebas no cuentan.
   - Nunca se unen dos sitios fiables a más de 30 km, recorridos con distancias incompatibles (Máster 30 y Máster 60 del mismo día), ni una prueba de BTT y otra de gravel en días distintos.
   - Cada ejecución deja `data/dedupe_report.json` con qué se ha unido y por qué. `python tools/check_dupes.py` lista posibles duplicados sin unir y fusiones dudosas.
-- Si una fuente falla, o devuelve de golpe menos del 60 % de lo que traía, se reutiliza su último volcado (`data/raw/*.json`) y el pie de la lista lo indica.
+- El recolector se identifica honestamente (`montar-dormir-comer/1.0 (+web)`), como en la app de carreras: hacerse pasar por Chrome provoca bloqueos de Cloudflare.
+- Si una fuente falla, o devuelve de golpe menos del 70 % de lo que traía, se reutiliza su último volcado (`data/raw/*.json`) y el pie de la lista lo indica.
 - Las pruebas con «Anul·lada», «Suspendida» o «Aplazada» en el nombre se marcan como suspendidas (se ocultan salvo que se pidan en Filtros).
 - Los calendarios federativos publican la temporada en curso. Los del año siguiente se leen solos en cuanto aparecen (suele ser entre diciembre y febrero), así que en otoño la lista es más corta.
 
 **Fuentes probadas que no se usan:**
 - Battistrada: es el calendario más grande, pero pide captcha a cualquier lectura automática.
+- Sportmaniacs, Global-Tempo y RockTheSport: son plataformas de inscripción de todos los deportes. Solo se usan webs de ciclismo, igual que la app de carreras solo usa webs de running.
+- Mammoth Bikes (calendario de marchas): sigue con la temporada 2025; se puede añadir cuando lo actualicen.
 - Bicimarket, Sanferbike y Deporticket: responden 403.
 - RockTheSport: solo funciona con JavaScript o con clave privada.
 - Bikezona: casi vacía.
@@ -110,7 +113,7 @@ cd web && python -m http.server 8000   # http://localhost:8000
 ```
 
 ### Publicado y actualizado cada día (GitHub Pages)
-`.github/workflows/weekly.yml` se ejecuta **cada día a las 03:43 UTC** (GitHub suele retrasarlo unas horas). Recolecta, guarda los datos en el repo solo si las pruebas han cambiado y publica `web/` en GitHub Pages. También se puede lanzar a mano con *Run workflow*. Los pasos para activarlo desde el móvil están en `docs/ACTIVAR.md`.
+`.github/workflows/weekly.yml` se ejecuta **cada día a las 05:00 UTC** (GitHub suele retrasarlo unas horas). Recolecta, guarda los datos en el repo y publica `web/` en GitHub Pages. También se puede lanzar a mano con *Run workflow*. Los pasos para activarlo desde el móvil están en `docs/ACTIVAR.md`.
 
 ## App Android (APK)
 

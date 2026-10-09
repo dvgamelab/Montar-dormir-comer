@@ -2,7 +2,7 @@ name: Recolectar pruebas (diario) y publicar
 
 on:
   schedule:
-    - cron: "43 3 * * *"   # cada día 03:43 UTC (05:43 en España en verano); GitHub suele retrasarlo
+    - cron: "0 5 * * *"   # cada día a las 05:00 UTC (07:00 en España en verano); GitHub suele retrasarlo
   workflow_dispatch:        # botón «Run workflow» para lanzarlo a mano
   push:
     paths: ["web/**", ".github/workflows/weekly.yml"]
@@ -21,7 +21,7 @@ jobs:
     # la recolección solo en la rama principal y al programarla o lanzarla a mano
     if: github.event_name != 'push' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,33 +32,18 @@ jobs:
       - run: pip install -r scraper/requirements.txt
       - name: Recolectar
         env:
-          DETAIL_BUDGET: "1500"
-          GEOCODE_BUDGET: "800"
+          GEOCODE_BUDGET: "2500"
+          DETAIL_BUDGET: "400"
           GPX_BUDGET: "1200"
         run: python scraper/run.py
       - name: Auditoría de duplicados
         run: python tools/check_dupes.py | tail -40
-      - name: Guardar datos en el repo (solo si han cambiado las pruebas)
+      - name: Guardar datos en el repo
         run: |
-          # si las pruebas son las mismas que ayer no se hace commit (solo cambiarían la hora y las cachés)
-          if python - <<'PY'
-          import json, subprocess, sys
-          new = json.load(open("web/data/rides.json"))["rides"]
-          try:
-              old = json.loads(subprocess.check_output(["git", "show", "HEAD:web/data/rides.json"]))["rides"]
-          except Exception:
-              old = None
-          sys.exit(0 if new == old else 1)
-          PY
-          then
-            echo "Sin cambios en las pruebas: no se guarda nada"
-            git checkout -- web/data data
-            exit 0
-          fi
           git config user.name "mdc-bot"
           git config user.email "mdc-bot@users.noreply.github.com"
           git add web/data data
-          git diff --cached --quiet || git commit -m "Datos $(date -u +%Y-%m-%d)"
+          git diff --cached --quiet || git commit -m "Datos $(date -u +'%Y-%m-%d %H:%M') UTC"
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
           git push
 

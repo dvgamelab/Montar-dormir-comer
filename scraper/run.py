@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from common import classify, dump, fold, track_stats, haversine, load, log, parse_distances, session  # noqa: E402
 import geo  # noqa: E402
-from sources import federaciones, ciclisme_cat, sportmaniacs, globaltempo, pedalesyzapatillas, alltricks  # noqa: E402
+from sources import federaciones, ciclisme_cat, ciclink, ciclo21, pedalesyzapatillas, alltricks  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
@@ -35,16 +35,15 @@ OUT = os.path.join(ROOT, "web", "data", "rides.json")
 SOURCES = {
     "federaciones": federaciones,
     "ciclisme.cat": ciclisme_cat,
-    "sportmaniacs": sportmaniacs,
-    "global-tempo": globaltempo,
+    "ciclink": ciclink,
+    "ciclo21": ciclo21,
     "pedalesyzapatillas": pedalesyzapatillas,
     "alltricks": alltricks,
 }
 # prioridad para nombre, fecha y datos cuando una prueba sale en varias fuentes
 PRIORITY = list(SOURCES)
 LABEL = {
-    "federaciones": "RFEC y federaciones", "ciclisme.cat": "Federació Catalana", "sportmaniacs": "Sportmaniacs",
-    "global-tempo": "Global-Tempo", "pedalesyzapatillas": "Pedales y Zapatillas", "alltricks": "Alltricks",
+    "federaciones": "RFEC y federaciones", "ciclisme.cat": "Federació Catalana", "ciclink": "Ciclink", "ciclo21": "Ciclo21", "pedalesyzapatillas": "Pedales y Zapatillas", "alltricks": "Alltricks",
 }
 
 
@@ -372,7 +371,7 @@ def merge(c):
 
 
 # Fuentes cuyo enlace es una página común a muchas pruebas (blogs): la ficha se identifica por nombre y fecha.
-SHARED_URL = {"pedalesyzapatillas", "alltricks"}
+SHARED_URL = {"pedalesyzapatillas", "alltricks", "ciclo21"}
 
 
 def seen_key(x):
@@ -435,7 +434,7 @@ def main():
             if not rows:
                 raise RuntimeError("0 pruebas: ¿ha cambiado la web?")
             prev = len(load(os.path.join(RAW, f"{name}.json"), []))
-            if prev >= 50 and len(rows) < prev * 0.6:  # caída brusca = bloqueo o web cambiada: no perder datos buenos
+            if prev >= 50 and len(rows) < prev * 0.7:  # caída brusca = bloqueo o web cambiada: no perder datos buenos
                 raise RuntimeError(f"solo {len(rows)} pruebas frente a {prev} la vez anterior; se conservan los datos previos")
             dump(os.path.join(RAW, f"{name}.json"), rows)
             status[name] = {"ok": True, "count": len(rows), "at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -445,8 +444,15 @@ def main():
             status[name] = {**status.get(name, {}), "ok": False, "error": str(e)[:300],
                             "failed_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         dump(cpath, cache)
+    status = {k: v for k, v in status.items() if k in SOURCES}  # fuentes retiradas fuera del estado
     dump(os.path.join(DATA, "status.json"), status)
     build(status, args.geocode_budget, args.gpx_budget)
+
+
+# provincias/regiones que algunas webs ponen a pruebas del extranjero
+FOREIGN = re.compile(r"\b(alemania|francia|fran[cç]a|portugal|italia|andorra|marruecos|reino unido|inglaterra|irlanda|suiza|austria|holanda|"
+                     r"pa[ií]ses bajos|b[eé]lgica|bèlgica|eslov[eè]nia|grecia|jap[oó]n|china|cuba|m[eé]xico|argentina|chile|"
+                     r"colombia|per[uú]|estados unidos|eeuu|usa)\b|^ue-", re.I)
 
 
 def build(status, geocode_budget=400, gpx_budget=400):
@@ -459,7 +465,7 @@ def build(status, geocode_budget=400, gpx_budget=400):
         for r in load(os.path.join(RAW, f"{name}.json"), []):
             if not r.get("date") or (r.get("end") or r["date"]) < today:
                 continue
-            cl = classify(r["name"], r.get("kind", ""), r.get("categories", ""), strict=name in ("sportmaniacs", "global-tempo"))
+            cl = classify(r["name"], r.get("kind", ""), r.get("categories", ""), strict=False)
             if not cl:
                 dropped[name] += 1
                 continue
@@ -480,7 +486,8 @@ def build(status, geocode_budget=400, gpx_budget=400):
             rows.append(r)
     log.info("filas válidas: %d · descartadas (no son bici o son de escuelas): %s", len(rows), dict(dropped))
 
-    rows = [r for r in rows if fold(r.get("province", "")) not in ("franca", "francia", "france", "andorra", "altres", "portugal")]
+    rows = [r for r in rows if not (FOREIGN.search(r.get("province") or "") or FOREIGN.search(r.get("region") or "")
+                                    or fold(r.get("province", "")) in ("franca", "altres"))]
     for r in rows:
         paren = re.search(r"\(([^()]+)\)", r.get("city", ""))
         prov = (geo.norm_province(paren.group(1)) if paren else None) or geo.norm_province(r.get("province", "")) or \
@@ -518,6 +525,10 @@ def build(status, geocode_budget=400, gpx_budget=400):
         r["_tok"] = tokens(r["name"])
     gc.save()
     dump(tracks.path, tracks.cache)
+    before = len(rows)
+    in_es = lambda r: r.get("lat") is not None and 27.4 < r["lat"] < 44.0 and -18.5 < r["lon"] < 4.6  # península, Baleares y Canarias
+    rows = [r for r in rows if r["province"] or in_es(r)]  # sin provincia española ni GPS en España: extranjera o sin ubicar
+    log.info("descartadas %d fichas fuera de España o sin ubicación", before - len(rows))
     tracks.clean()
 
     clusters = dedupe(rows)
